@@ -26,5 +26,8 @@
     <ClInclude Include="pvcam.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="tiffio.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

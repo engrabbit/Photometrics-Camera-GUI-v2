@@ -10,9 +10,12 @@
 // Order of imports is critical: Yaaseen
 #include <stdio.h>
 #include <stdlib.h>
-//NEW API LIBRARIES, check order of includsion...as well as necessities
+#include <iostream>
+#include <fstream>
+//NEW API LIBRARIES, check order of inclusion...as well as necessities
 #include "master.h"
 #include "pvcam.h"
+#include "tiffio.h"
 //
 #define BUFFSIZE 2
 // define CamList class, created due to removal from qimaging
@@ -130,9 +133,7 @@ bool Camera::GrabFrame(int frame_num) //Grabs one frame, with error checking
 		return false; //exits frame grab with fail status, TODO: abort 
 	}
 	//Valid data now in frame, flush to file
-	for (int i = 0; i < (size / sizeof(uns16)); i++){
-		//print out text
-	}
+	SaveFrame("test", frame_num);
 	//
 	printf("Remaining Frames %i\n", numberframes);
 	return true;
@@ -154,8 +155,25 @@ bool Camera::ShutCamera(void)
 //Save Image (multi-threaded) deal with later, for now just flushing to file
 bool Camera::SaveFrame(char *filename, int frame_num)
 {
-	FILE *f = fopen("frame" + frame_num, "w");
-	//	//initializing OpenMP multi-threading
+	long bytesPerImage = 2 * frame_w * frame_h;
+	TIFF * tiff = TIFFOpen(filename, "w");
+	TIFFSetDirectory(tiff, 0);
+	TIFFSetField(tiff, TIFFTAG_IMAGEWIDTH, frame_w);
+	TIFFSetField(tiff, TIFFTAG_IMAGELENGTH, frame_h);
+	TIFFSetField(tiff, TIFFTAG_BITSPERSAMPLE, 16);
+	TIFFSetField(tiff, TIFFTAG_COMPRESSION, COMPRESSION_NONE);
+	TIFFSetField(tiff, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_MINISBLACK);
+	TIFFSetField(tiff, TIFFTAG_SAMPLESPERPIXEL, 1);
+	TIFFSetField(tiff, TIFFTAG_ROWSPERSTRIP, frame_h);
+	TIFFSetField(tiff, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
+	TIFFSetField(tiff, TIFFTAG_RESOLUTIONUNIT, RESUNIT_NONE);
+	TIFFSetField(tiff, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
+	TIFFSetField(tiff, TIFFTAG_SUBFILETYPE, FILETYPE_PAGE);
+	TIFFSetField(tiff, TIFFTAG_PAGENUMBER, 0, 2);
+	TIFFWriteRawStrip(tiff, 0, , bytesPerImage);
+	TIFFWriteDirectory(tiff);
+	TIFFClose(tiff);
+	// Ideally we want to be able to stream what we are saving, that is all this code will do in the future
 	//#pragma omp parallel firstprivate (odd_frame)
 	//	{
 	//		//breaking code into 3 sections (image capture/save, image display, image histogram)
