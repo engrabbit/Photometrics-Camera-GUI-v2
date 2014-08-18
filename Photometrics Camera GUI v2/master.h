@@ -78,7 +78,7 @@ typedef signed char    int8,    PV_PTR_DECL  int8_ptr;
 typedef unsigned char  uns8,    PV_PTR_DECL  uns8_ptr;
 typedef short          int16,   PV_PTR_DECL  int16_ptr;
 typedef unsigned short uns16,   PV_PTR_DECL  uns16_ptr;
-typedef long           int32,   PV_PTR_DECL  int32_ptr;
+typedef long           int32_,   PV_PTR_DECL  int32_ptr;
 typedef unsigned long  uns32,   PV_PTR_DECL  uns32_ptr;
 typedef double         flt64,   PV_PTR_DECL  flt64_ptr;
 typedef void                    PV_BUFP_DECL void_ptr;

@@ -6,16 +6,20 @@
 //Libraries:
 //
 //PVCam 64bit SDK used for development.
+//
+//IMPORTANT NOTES:
+//int32 struct from master.h renamed to int32_ due to conflicts with typedef in TIFF.h
+//shouldn't be an issue really as we don't use this type, only uns32 is needed.
 
 // Order of imports is critical: Yaaseen
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
 #include <fstream>
+#include "tiffio.h"
 //NEW API LIBRARIES, check order of inclusion...as well as necessities
 #include "master.h"
 #include "pvcam.h"
-#include "tiffio.h"
 //
 #define BUFFSIZE 2
 // define CamList class, created due to removal from qimaging
