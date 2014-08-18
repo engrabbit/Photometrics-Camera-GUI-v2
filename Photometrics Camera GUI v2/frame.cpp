@@ -112,7 +112,7 @@ bool Camera::InitCamera(void)
 	pl_set_param(hCamera, PARAM_GAIN_INDEX, &gain);	// Set Gain Param
 	region = { 0, width, bin, 0, height, bin };
 	//Setup Sequence for Camera
-	pl_exp_setup_seq(hCamera, frames_total, 1, &captureRegion, TIMED_MODE, exposure_time, &size); //Still need to allocate stream space
+	pl_exp_setup_seq(hCamera, frames_total, 1, &region, TIMED_MODE, exposure_time, &size); //Still need to allocate stream space
 	frame = (uns16*)malloc(size);
 	return true;
 }
