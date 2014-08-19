@@ -37,8 +37,6 @@ private:
 	//Other Config
 	unsigned long frame_w;			// width and length of image
 	unsigned long frame_h;
-	unsigned long frame_size;		// size of frame in bytes
-	bool trigDone;					// soft trigger flag
 
 public:
 	//Camera Information
@@ -47,6 +45,9 @@ public:
 	int16 o_mode;					// defines method of opening camera
 	uns16 *frame;					// Frame structure
 	int16 status;
+	uns32 buffer_size, frame_size;
+	uns16 *buffer;
+	void_ptr address;
 	rgn_type region;
 	uns32 size;
 	uns32 not_needed;				// Filler Variable
@@ -54,7 +55,7 @@ public:
 	Camera();						// constructor
 	int frames_cur;					// current number of frames grabbed
 	bool InitCamera(void);			// start camera
-	bool GrabFrame(int frame_num);
+	bool GrabFrameCont(int numberframes);
 	bool ShutCamera(void);			// shut camera
 	bool asyncDone[BUFFSIZE];	// flags to alert if frame grab of each frame in async is complete
 	bool SaveFrame(char* filename, int frame_num);	// save the frame as TIF file to memory
@@ -119,26 +120,40 @@ bool Camera::InitCamera(void)
 	pl_set_param(hCamera, PARAM_GAIN_INDEX, &gain);	// Set Gain Param
 	region = { 0, width, bin, 0, height, bin };
 	//Setup Sequence for Camera
-	pl_exp_setup_seq(hCamera, frames_total, 1, &region, TIMED_MODE, exposure_time, &size); //Still need to allocate stream space
+	pl_exp_setup_cont(hCamera, 1, &region, TIMED_MODE, 100, &frame_size, CIRC_OVERWRITE); //Still need to allocate stream space
 	frame = (uns16*)malloc(size);
 	return true;
 }
 
-bool Camera::GrabFrame(int frame_num) //Grabs one frame, with error checking
+bool Camera::GrabFrameCont(int numberframes) //Grabs continuous session of frames, saves as TIFF
 {
-	uns16 numberframes = frames_total - frame_num;
-	pl_exp_start_seq(hCamera, frame);
-
-	while (pl_exp_check_status(hCamera, &status, &not_needed) &&
-		(status != READOUT_COMPLETE && status != READOUT_FAILED));	//Waits for either an error, or data
-
-	if (status == READOUT_FAILED) {
-		printf("Data collection error: %i\n", pl_error_code());
-		return false; //exits frame grab with fail status, TODO: abort 
-	}
-	//Valid data now in frame, flush to file
-	SaveFrame("test", frame_num);
-	//
+	/* set up a circular buffer of 3 frames */
+	buffer_size = frame_size * 3;
+	buffer = (uns16*)malloc(buffer_size);
+	/* Start the acquisition */
+	printf("Collecting %i Frames\n", numberframes);
+	pl_exp_start_cont(hCamera, buffer, buffer_size);
+	/* ACQUISITION LOOP */
+	while (numberframes) {
+		/* wait for data or error */
+		while (pl_exp_check_cont_status(hCamera, &status, &not_needed,
+			&not_needed) &&
+			(status != READOUT_COMPLETE && status != READOUT_FAILED));
+		/* Check Error Codes */
+		if (status == READOUT_FAILED) {
+			printf("Data collection error: %i\n", pl_error_code());
+			break;
+		}
+		if (pl_exp_get_latest_frame(hCamera, &address)) {
+			/* address now points to valid data */
+			SaveFrame("test", frame_num);
+			printf("Remaining Frames %i\n", numberframes);
+		}
+	} /* End while */
+	/* Stop the acquisition */
+	pl_exp_stop_cont(hCamera, CCS_HALT);
+	// Stop camera now
+	ShutCamera();
 	printf("Remaining Frames %i\n", numberframes);
 	return true;
 }
@@ -146,6 +161,9 @@ bool Camera::GrabFrame(int frame_num) //Grabs one frame, with error checking
 // Shutting Camera Class
 bool Camera::ShutCamera(void)
 {
+	/*Uninit the sequence */
+	pl_exp_uninit_seq();
+	free(buffer);
 	printf("<start close>");
 	pl_cam_close(hCamera);	// stop streaming
 	printf("<stopped streaming>");
@@ -174,7 +192,7 @@ bool Camera::SaveFrame(char *filename, int frame_num)
 	TIFFSetField(tiff, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
 	TIFFSetField(tiff, TIFFTAG_SUBFILETYPE, FILETYPE_PAGE);
 	TIFFSetField(tiff, TIFFTAG_PAGENUMBER, 0, 2);
-	TIFFWriteRawStrip(tiff, 0, , bytesPerImage);
+	TIFFWriteRawStrip(tiff, 0, address, bytesPerImage);
 	TIFFWriteDirectory(tiff);
 	TIFFClose(tiff);
 	// Ideally we want to be able to stream what we are saving, that is all this code will do in the future
@@ -228,7 +246,15 @@ void roi_select_mode()
 
 }
 
-int main()
-{
+int main(){
+	int numberframes = 10;
+	//Call a new camera class to be used. Assuming only one PVCAM attached.
+	Camera main_camera;
+	main_camera.InitCamera();
+	//We now need to fill remaining settings.
 
+	//Call our main frame grab function.
+	main_camera.GrabFrameCont(numberframes);
+	//Shutdown the camera
+	main_camera.ShutCamera();
 }
