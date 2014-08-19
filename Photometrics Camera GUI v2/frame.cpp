@@ -120,17 +120,15 @@ bool Camera::InitCamera(void)
 	if (pl_get_param(hCamera, PARAM_CIRC_BUFFER, ATTR_AVAIL, &avail_flag)
 		&&
 		avail_flag)
-		printf("Circular Buffer Supported.");
+		printf("Circular Buffer Supported.\n");
 	else{
 		printf("circular buffers not supported\n");
 		ShutCamera();
 	}
-	// left_edge, top_edge, width, height
-	pl_set_param(hCamera, PARAM_GAIN_INDEX, &gain);	// Set Gain Param
 	region = { 0, width, bin, 0, height, bin };
 	//Setup Sequence for Camera
-	pl_exp_setup_cont(hCamera, 1, &region, TIMED_MODE, 100, &frame_size, CIRC_OVERWRITE); //Still need to allocate stream space
-	frame = (uns16*)malloc(size);
+	pl_exp_init_seq();
+	pl_exp_setup_cont(hCamera, 1, &region, TIMED_MODE, 100, &frame_size, CIRC_OVERWRITE); 
 	return true;
 }
 
@@ -149,12 +147,13 @@ bool Camera::GrabFrameCont(int numberframes) //Grabs continuous session of frame
 		while (pl_exp_check_cont_status(hCamera, &status, &not_needed,
 			&not_needed) &&
 			(status != READOUT_COMPLETE && status != READOUT_FAILED));
-		printf("camera didn't hang\n"); 
+		printf("Camera didn't hang.\n"); 
 		/* Check Error Codes */
 		if (status == READOUT_FAILED) {
 			printf("Data collection error: %i\n", pl_error_code());
 			break;
 		}
+		printf("%d", pl_error_code());
 		if (pl_exp_get_latest_frame(hCamera, &address)) {
 			/* address now points to valid data */
 			SaveFrame("test", frame_num);
@@ -232,7 +231,10 @@ bool Camera::SaveFrame(char *filename, int frame_num)
 }
 
 //Constructor
-Camera::Camera(){};
+Camera::Camera(){
+	frame_h = 500;
+	frame_w = 500;
+};
 
 //rec_mode is function called after user selects to record
 //it reads the settings from the GUI and opens a file selection
