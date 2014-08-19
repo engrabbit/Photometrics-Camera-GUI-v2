@@ -125,7 +125,6 @@ bool Camera::InitCamera(void)
 		printf("circular buffers not supported\n");
 		ShutCamera();
 	}
-	while (true);
 	// left_edge, top_edge, width, height
 	pl_set_param(hCamera, PARAM_GAIN_INDEX, &gain);	// Set Gain Param
 	region = { 0, width, bin, 0, height, bin };
