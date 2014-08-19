@@ -127,6 +127,7 @@ bool Camera::InitCamera(void)
 
 bool Camera::GrabFrameCont(int numberframes) //Grabs continuous session of frames, saves as TIFF
 {
+	int frame_num = 0;
 	/* set up a circular buffer of 3 frames */
 	buffer_size = frame_size * 3;
 	buffer = (uns16*)malloc(buffer_size);
@@ -134,7 +135,7 @@ bool Camera::GrabFrameCont(int numberframes) //Grabs continuous session of frame
 	printf("Collecting %i Frames\n", numberframes);
 	pl_exp_start_cont(hCamera, buffer, buffer_size);
 	/* ACQUISITION LOOP */
-	while (numberframes) {
+	while (frame_num != numberframes) {
 		/* wait for data or error */
 		while (pl_exp_check_cont_status(hCamera, &status, &not_needed,
 			&not_needed) &&
@@ -147,7 +148,8 @@ bool Camera::GrabFrameCont(int numberframes) //Grabs continuous session of frame
 		if (pl_exp_get_latest_frame(hCamera, &address)) {
 			/* address now points to valid data */
 			SaveFrame("test", frame_num);
-			printf("Remaining Frames %i\n", numberframes);
+			printf("Remaining Frames %i\n", (numberframes-frame_num));
+			frame_num++;
 		}
 	} /* End while */
 	/* Stop the acquisition */
