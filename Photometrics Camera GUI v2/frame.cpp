@@ -125,10 +125,12 @@ bool Camera::InitCamera(void)
 		printf("circular buffers not supported\n");
 		ShutCamera();
 	}
-	region = { 0, width, bin, 0, height, bin };
+	region = { 0, 511, 1, 0, 511, 1 };
 	//Setup Sequence for Camera
 	pl_exp_init_seq();
-	pl_exp_setup_cont(hCamera, 1, &region, TIMED_MODE, 100, &frame_size, CIRC_OVERWRITE); 
+	bool check = pl_exp_setup_cont(hCamera, 1, &region, TIMED_MODE, 100, &frame_size, CIRC_OVERWRITE); 
+	if (!check)
+		printf("Error: %i\n", pl_error_code());
 	return true;
 }
 
@@ -147,16 +149,15 @@ bool Camera::GrabFrameCont(int numberframes) //Grabs continuous session of frame
 		while (pl_exp_check_cont_status(hCamera, &status, &not_needed,
 			&not_needed) &&
 			(status != READOUT_COMPLETE && status != READOUT_FAILED));
-		printf("Camera didn't hang.\n"); 
 		/* Check Error Codes */
 		if (status == READOUT_FAILED) {
 			printf("Data collection error: %i\n", pl_error_code());
 			break;
 		}
-		printf("%d", pl_error_code());
 		if (pl_exp_get_latest_frame(hCamera, &address)) {
 			/* address now points to valid data */
-			SaveFrame("test", frame_num);
+			if (!(SaveFrame("test", frame_num)))
+				break;
 			printf("Remaining Frames %i\n", (numberframes-frame_num));
 			frame_num++;
 		}
@@ -164,48 +165,46 @@ bool Camera::GrabFrameCont(int numberframes) //Grabs continuous session of frame
 	/* Stop the acquisition */
 	printf("Capture Complete");
 	pl_exp_stop_cont(hCamera, CCS_HALT);
-	// Stop camera now
-	ShutCamera();
+	pl_exp_finish_seq(hCamera, buffer, 0);
+	pl_exp_uninit_seq();
+	free(buffer);
 	return true;
 }
 
 // Shutting Camera Class
 bool Camera::ShutCamera(void)
 {
-	/*Uninit the sequence */
-	pl_exp_uninit_seq();
-	free(buffer);
-	printf("<start close>");
 	pl_cam_close(hCamera);	// stop streaming
-	printf("<stopped streaming>");
+	printf("<Stopped Camera>\n");
 	pl_pvcam_uninit();	//Close Driver
-	printf("<closed driver>");
-	printf("%d", "closed");
-	free(frame);
-	printf("endclose");
-	return 0;
+	printf("<Closed Driver>\n");
+	return true;
 }
 //Save Image (multi-threaded) deal with later, for now just flushing to file
 bool Camera::SaveFrame(char *filename, int frame_num)
 {
-	printf("SaveFrame %d", frame_num);
-	long bytesPerImage = 2 * frame_w * frame_h;
-	TIFF * tiff = TIFFOpen(filename, "w");
+	printf("SaveFrame %d\n", frame_num);
+	long bytesPerImage = 2 * 511 * 511; // Needs to change to adapt to ROI
+	char integer_char[32];
+	sprintf(integer_char, "%d", frame_num);
+	char filename_added[100] = "TIFF_";
+	strcat(filename_added, integer_char);
+	strcat(filename_added, ".tiff");
+	TIFF * tiff = TIFFOpen(filename_added, "w");
 	TIFFSetDirectory(tiff, 0);
-	TIFFSetField(tiff, TIFFTAG_IMAGEWIDTH, frame_w);
-	TIFFSetField(tiff, TIFFTAG_IMAGELENGTH, frame_h);
+	TIFFSetField(tiff, TIFFTAG_IMAGEWIDTH, 511);
+	TIFFSetField(tiff, TIFFTAG_IMAGELENGTH, 511);
 	TIFFSetField(tiff, TIFFTAG_BITSPERSAMPLE, 16);
 	TIFFSetField(tiff, TIFFTAG_COMPRESSION, COMPRESSION_NONE);
 	TIFFSetField(tiff, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_MINISBLACK);
 	TIFFSetField(tiff, TIFFTAG_SAMPLESPERPIXEL, 1);
-	TIFFSetField(tiff, TIFFTAG_ROWSPERSTRIP, frame_h);
+	TIFFSetField(tiff, TIFFTAG_ROWSPERSTRIP, 511);
 	TIFFSetField(tiff, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
 	TIFFSetField(tiff, TIFFTAG_RESOLUTIONUNIT, RESUNIT_NONE);
 	TIFFSetField(tiff, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
 	TIFFSetField(tiff, TIFFTAG_SUBFILETYPE, FILETYPE_PAGE);
 	TIFFSetField(tiff, TIFFTAG_PAGENUMBER, 0, 2);
 	TIFFWriteRawStrip(tiff, 0, address, bytesPerImage);
-	TIFFWriteDirectory(tiff);
 	TIFFClose(tiff);
 	// Ideally we want to be able to stream what we are saving, that is all this code will do in the future
 	//#pragma omp parallel firstprivate (odd_frame)
