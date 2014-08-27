@@ -40,12 +40,12 @@ private:
 
 public:
 	//Camera Information
-	cameraList camlist[10];			// number of cameras attached (should be just one for ease)
 	int16 hCamera;					// handle to camera
 	int16 o_mode;					// defines method of opening camera
 	uns16 *frame;					// Frame structure
 	int16 status;
 	uns32 buffer_size, frame_size;
+	char cam_name[CAM_NAME_LEN];
 	uns16 *buffer;
 	void_ptr address;
 	rgn_type region;
@@ -71,7 +71,7 @@ char file_prefix[200];
 //number of images to take
 int num_images;
 //binning setting
-int bin;
+int bin = 2;
 //gain setting
 float gain;
 //offset setting
@@ -91,11 +91,11 @@ bool speckle;
 //left edge of ROI
 int left_edge;
 //width of ROI
-int width;
+int width = 501;
 //top edge of ROI
 int top_edge;
 //height of ROI
-int height;
+int height = 501;
 //delay between clicking record and actual record in seconds
 //allows for time to exit the room, shut lights, etc.
 int delay;
@@ -109,19 +109,26 @@ int emGain;
 bool Camera::InitCamera(void)
 {
 	hCamera = NULL;
-	unsigned long listLen = sizeof(camlist) / sizeof(camlist[0]);
-
+	rs_bool avail_flag;
 	// Open Library Driver
 	pl_pvcam_init();
-	pl_exp_init_seq();
 	// Get Camera Information
-	pl_cam_get_name(0, camlist[0].cam_name);
-	// left_edge, top_edge, width, height
-	pl_set_param(hCamera, PARAM_GAIN_INDEX, &gain);	// Set Gain Param
+	pl_cam_get_name(0, cam_name);
+	// Open Camera
+	pl_cam_open(cam_name, &hCamera, OPEN_EXCLUSIVE);
+	//Check Circular Buffer
+	if (pl_get_param(hCamera, PARAM_CIRC_BUFFER, ATTR_AVAIL, &avail_flag)
+		&&
+		avail_flag)
+		printf("Circular Buffer Supported.\n");
+	else{
+		printf("circular buffers not supported\n");
+		ShutCamera();
+	}
 	region = { 0, width, bin, 0, height, bin };
 	//Setup Sequence for Camera
-	pl_exp_setup_cont(hCamera, 1, &region, TIMED_MODE, 100, &frame_size, CIRC_OVERWRITE); //Still need to allocate stream space
-	frame = (uns16*)malloc(size);
+	pl_exp_init_seq();
+	pl_exp_setup_cont(hCamera, 1, &region, TIMED_MODE, 100, &frame_size, CIRC_OVERWRITE); 
 	return true;
 }
 
@@ -140,11 +147,13 @@ bool Camera::GrabFrameCont(int numberframes) //Grabs continuous session of frame
 		while (pl_exp_check_cont_status(hCamera, &status, &not_needed,
 			&not_needed) &&
 			(status != READOUT_COMPLETE && status != READOUT_FAILED));
+		printf("Camera didn't hang.\n"); 
 		/* Check Error Codes */
 		if (status == READOUT_FAILED) {
 			printf("Data collection error: %i\n", pl_error_code());
 			break;
 		}
+		printf("%d", pl_error_code());
 		if (pl_exp_get_latest_frame(hCamera, &address)) {
 			/* address now points to valid data */
 			SaveFrame("test", frame_num);
@@ -153,10 +162,10 @@ bool Camera::GrabFrameCont(int numberframes) //Grabs continuous session of frame
 		}
 	} /* End while */
 	/* Stop the acquisition */
+	printf("Capture Complete");
 	pl_exp_stop_cont(hCamera, CCS_HALT);
 	// Stop camera now
 	ShutCamera();
-	printf("Remaining Frames %i\n", numberframes);
 	return true;
 }
 
@@ -179,6 +188,7 @@ bool Camera::ShutCamera(void)
 //Save Image (multi-threaded) deal with later, for now just flushing to file
 bool Camera::SaveFrame(char *filename, int frame_num)
 {
+	printf("SaveFrame %d", frame_num);
 	long bytesPerImage = 2 * frame_w * frame_h;
 	TIFF * tiff = TIFFOpen(filename, "w");
 	TIFFSetDirectory(tiff, 0);
@@ -221,7 +231,10 @@ bool Camera::SaveFrame(char *filename, int frame_num)
 }
 
 //Constructor
-Camera::Camera(){};
+Camera::Camera(){
+	frame_h = 500;
+	frame_w = 500;
+};
 
 //rec_mode is function called after user selects to record
 //it reads the settings from the GUI and opens a file selection
@@ -259,4 +272,5 @@ int main(){
 	main_camera.GrabFrameCont(numberframes);
 	//Shutdown the camera
 	main_camera.ShutCamera();
+	return 0;
 }
