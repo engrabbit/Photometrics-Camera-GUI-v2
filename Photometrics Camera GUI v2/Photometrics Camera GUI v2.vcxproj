@@ -81,6 +81,7 @@
     <ClCompile Include="frame.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="frame.h" />
     <ClInclude Include="master.h" />
     <ClInclude Include="pvcam.h" />
     <ClInclude Include="tiff.h" />
